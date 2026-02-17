@@ -4,21 +4,21 @@ on:
   workflow_call:
     inputs:
       workspace_path:
-        description: 'Path to the workspace to publish'
+        description: "Path to the workspace to publish"
         required: true
         type: string
       workspace_version:
-        description: 'Version to publish for the workspace'
+        description: "Version to publish for the workspace"
         required: true
         type: string
       release_tag:
-        description: 'Release tag (e.g., alpha, rc, stable)'
+        description: "Release tag (e.g., alpha, rc, stable)"
         required: true
         type: string
 
 permissions:
   contents: write
-  packages: write
+  id-token: write
 
 jobs:
   publish:
@@ -30,14 +30,12 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Use Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 20.x
-          cache: 'npm'
-          registry-url: 'https://npm.pkg.github.com'
+          node-version: 24.x
+          cache: "npm"
+          registry-url: "https://registry.npmjs.org/"
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Defaults to the user or organization that owns the workflow file
-          scope: ${{ '@' }}${{ github.repository_owner }}
       - name: Get package name to be released
         id: get-name
         working-directory: ${{ inputs.workspace_path }}
@@ -53,16 +51,14 @@ jobs:
           echo "✅ Version verified: $ACTUAL_VERSION"
       - name: Install dependencies
         working-directory: ${{ inputs.workspace_path }}
-        run: npm ci --omit=dev
+        run: npm ci
       # Optional: Build the package if needed
       - name: build package
-        run: tsc --build ${{ inputs.build-execute-workspace }}
+        working-directory: ${{ inputs.workspace_path }}
+        run: npm run build
       - name: Publish npm package
         working-directory: ${{ inputs.workspace_path }}
         run: |
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
-          echo "//registry.npmjs.org/:_authToken=${NPM_AUTH_TOKEN}" >> .npmrc
-
           # Set npm tag based on release tag
           if [ "${{ inputs.release_tag }}" = "stable" ]; then
             echo "📦 Publishing with 'latest' tag for stable release"
@@ -71,8 +67,6 @@ jobs:
             echo "📦 Publishing with '${{ inputs.release_tag }}' tag for pre-release"
             npm publish --tag "${{ inputs.release_tag }}"
           fi
-        env:
-          NPM_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
       - name: Add Tag
         run: |
           TAG_NAME="${PACKAGE_NAME}-v${VERSION}"

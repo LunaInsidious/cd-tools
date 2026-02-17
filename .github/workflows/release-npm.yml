@@ -3,11 +3,10 @@ name: Release NPM Packages
 on:
   push:
     paths:
-      - '.cdtools/*-*.json'
+      - ".cdtools/*-*.json"
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
 
 jobs:
   analyze-npm-workspaces:
@@ -23,27 +22,20 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: Use Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
-          node-version: 20.x
-      - name: Verify analyze script exists
-        run: |
-          if [ ! -f ".github/scripts/analyze-workspaces.sh" ]; then
-            echo "❌ analyze-workspaces.sh not found! Run 'cd-tools init' to set up required scripts."
-            exit 1
-          fi
-
-          chmod +x .github/scripts/analyze-workspaces.sh
-          echo "✅ analyze-workspaces.sh is ready"
-
+          node-version: 24.x
       - name: Analyze NPM workspaces from branch info
         id: analyze
-        run: .github/scripts/analyze-workspaces.sh npm
+        run: bash .github/scripts/analyze-workspaces.sh npm
 
   publish-npm:
     name: Publish NPM Packages
     needs: analyze-npm-workspaces
     if: ${{ needs.analyze-npm-workspaces.outputs.has-npm == 'true' }}
+    permissions:
+      contents: write
+      id-token: write
     strategy:
       matrix: ${{ fromJson(needs.analyze-npm-workspaces.outputs.npm-matrix) }}
       fail-fast: false

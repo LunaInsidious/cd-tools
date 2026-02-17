@@ -19,9 +19,7 @@
 			"type": "typescript",
 			"baseVersion": "1.1.8",
 			"deps": [],
-			"registries": [
-				"npm"
-			]
+			"registries": ["npm"]
 		}
 	]
 }

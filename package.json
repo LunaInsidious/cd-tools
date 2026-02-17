@@ -1,6 +1,6 @@
 {
 	"name": "cd-tools",
-	"version": "1.1.8",
+	"version": "1.1.9-alpha.20260217100902",
 	"bin": {
 		"cd-tools": "dist/index.js"
 	},
@@ -19,20 +19,30 @@
 		"test:coverage": "vitest --coverage",
 		"dev": "npm run build && node dist/index.js"
 	},
-	"keywords": [],
-	"author": "",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/LunaInsidious/cd-tools"
+	},
+	"keywords": [
+		"cd",
+		"continuous deployment",
+		"monorepo",
+		"github actions",
+		"automation"
+	],
+	"author": "LunaInsidious",
 	"license": "MIT",
 	"description": "CD (Continuous Deployment) tool for monorepo management",
 	"devDependencies": {
 		"@biomejs/biome": "2.1.2",
 		"@types/node": "^22.15.2",
 		"@vitest/coverage-v8": "^3.2.4",
+		"@types/prompts": "2.4.9",
+		"@tsconfig/strictest": "^2.0.5",
 		"typescript": "^5.8.3"
 	},
 	"dependencies": {
-		"@tsconfig/strictest": "^2.0.5",
 		"vitest": "^3.2.4",
-		"prompts": "2.4.2",
-		"@types/prompts": "2.4.9"
+		"prompts": "2.4.2"
 	}
 }

@@ -325,7 +325,9 @@ describe("startPrCommand", () => {
 			await startPrCommand();
 
 			expect(consoleSpy).toHaveBeenCalledWith("Next steps:");
-			expect(consoleSpy).toHaveBeenCalledWith("1. Make your changes");
+			expect(consoleSpy).toHaveBeenCalledWith(
+				"1. Make your changes and commit them to the new branch.",
+			);
 			expect(consoleSpy).toHaveBeenCalledWith(
 				"2. Run 'cd-tools push-pr' to update versions and create PR",
 			);
