@@ -32,7 +32,7 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22.x
+          node-version: 24.x
           cache: "npm"
           registry-url: "https://registry.npmjs.org/"
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -49,16 +49,13 @@ jobs:
             exit 1
           fi
           echo "✅ Version verified: $ACTUAL_VERSION"
-      # for npm trusted publishing, npm@11.5.1 or later is required
-      - name: Update npm
-        run: npm install -g npm@11.5.1
       - name: Install dependencies
         working-directory: ${{ inputs.workspace_path }}
         run: npm ci
       # Optional: Build the package if needed
       - name: build package
         working-directory: ${{ inputs.workspace_path }}
-        run: npm run build
+        run: npm run build && npm --version
       - name: Publish npm package
         working-directory: ${{ inputs.workspace_path }}
         run: |
