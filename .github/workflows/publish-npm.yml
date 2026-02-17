@@ -36,8 +36,6 @@ jobs:
           cache: "npm"
           registry-url: "https://npm.pkg.github.com"
           token: ${{ secrets.GITHUB_TOKEN }}
-          # Defaults to the user or organization that owns the workflow file
-          scope: ${{ '@' }}${{ github.repository_owner }}
       - name: Get package name to be released
         id: get-name
         working-directory: ${{ inputs.workspace_path }}
