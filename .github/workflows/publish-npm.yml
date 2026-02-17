@@ -17,8 +17,8 @@ on:
         type: string
 
 permissions:
-  contents: write
-  packages: write
+  contents: read
+  id-token: write
 
 jobs:
   publish:
@@ -60,9 +60,6 @@ jobs:
       - name: Publish npm package
         working-directory: ${{ inputs.workspace_path }}
         run: |
-          echo "registry=https://registry.npmjs.org/" >> .npmrc
-          echo "//registry.npmjs.org/:_authToken=${NPM_AUTH_TOKEN}" >> .npmrc
-
           # Set npm tag based on release tag
           if [ "${{ inputs.release_tag }}" = "stable" ]; then
             echo "📦 Publishing with 'latest' tag for stable release"
@@ -71,8 +68,6 @@ jobs:
             echo "📦 Publishing with '${{ inputs.release_tag }}' tag for pre-release"
             npm publish --tag "${{ inputs.release_tag }}"
           fi
-        env:
-          NPM_AUTH_TOKEN: ${{secrets.NPM_TOKEN}}
       - name: Add Tag
         run: |
           TAG_NAME="${PACKAGE_NAME}-v${VERSION}"
