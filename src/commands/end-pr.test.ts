@@ -53,6 +53,10 @@ vi.mock("../utils/github.js", () => ({
 	mergePullRequest: vi.fn(),
 }));
 
+vi.mock("prompts", () => ({
+	default: vi.fn(),
+}));
+
 import {
 	type Config,
 	checkInitialized,
@@ -79,6 +83,7 @@ import {
 	getPackageName,
 	updateMultipleProjectVersions,
 } from "../utils/version-updater.js";
+import prompts from "prompts";
 
 // Mock typed functions
 const mockCheckInitialized = vi.mocked(checkInitialized);
@@ -100,6 +105,7 @@ const mockGetTagsMatchingPattern = vi.mocked(getTagsMatchingPattern);
 const mockSwitchToBranch = vi.mocked(switchToBranch);
 const mockDeleteLocalBranch = vi.mocked(deleteLocalBranch);
 const mockGetPackageName = vi.mocked(getPackageName);
+const mockPrompts = vi.mocked(prompts);
 
 let mockProcessExit: MockInstance<
 	(code?: number | string | null | undefined) => never
@@ -185,6 +191,7 @@ describe("endPrCommand", () => {
 		mockUpdateMultipleProjectVersions.mockResolvedValue(undefined);
 		mockMergePullRequest.mockResolvedValue(undefined);
 		mockGetTagsMatchingPattern.mockResolvedValue([]);
+		mockPrompts.mockResolvedValue({ confirm: true });
 	});
 
 	afterEach(() => {

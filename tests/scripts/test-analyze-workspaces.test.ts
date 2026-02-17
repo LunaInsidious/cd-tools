@@ -230,7 +230,9 @@ describe("analyze-workspaces.sh Script Tests", () => {
 				await execAsync(`${scriptPath} invalid`);
 				expect.fail("Should have thrown an error");
 			} catch (error) {
-				expect(error.message).toContain("Invalid registry filter: invalid");
+				expect(error instanceof Error ? error.message : "").toContain(
+					"Invalid registry filter: invalid",
+				);
 			}
 		});
 
@@ -254,7 +256,9 @@ describe("analyze-workspaces.sh Script Tests", () => {
 				await execAsync(`${scriptPath} npm`);
 				expect.fail("Should have thrown an error");
 			} catch (error) {
-				expect(error.message).toContain("Config file not found");
+				expect(error instanceof Error ? error.message : "").toContain(
+					"Config file not found",
+				);
 			}
 		});
 

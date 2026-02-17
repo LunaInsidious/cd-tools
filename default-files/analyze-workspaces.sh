@@ -1,9 +1,10 @@
 #!/bin/bash
 
 # analyze-workspaces.sh
-# Analyzes workspaces from branch info files and outputs matrix data for GitHub Actions
+# Analyze workspaces from branch info files and output matrix data for GitHub Actions.
 #
-# Usage: ./analyze-workspaces.sh [npm|docker|all]
+# Usage:
+#   ./analyze-workspaces.sh [npm|docker|all]
 #
 # Outputs (to GITHUB_OUTPUT if available, otherwise stdout):
 #   - npm-matrix: JSON matrix for NPM workspaces
@@ -14,221 +15,173 @@
 
 set -euo pipefail
 
-# Parse arguments
+# --- Argument parsing --------------------------------------------------------
+
 REGISTRY_FILTER="${1:-all}"
 
-# Validate arguments
 if [[ ! "$REGISTRY_FILTER" =~ ^(npm|docker|all)$ ]]; then
-    echo "❌ Invalid registry filter: $REGISTRY_FILTER" >&2
-    echo "Usage: $0 [npm|docker|all]" >&2
-    exit 1
+  echo "❌ Invalid registry filter: $REGISTRY_FILTER" >&2
+  echo "Usage: $0 [npm|docker|all]" >&2
+  exit 1
 fi
 
-# Auto-detect branch info file from current branch
-CURRENT_BRANCH=$(git branch --show-current)
-BRANCH_INFO_FILE=".cdtools/$(echo "$CURRENT_BRANCH" | sed 's/[^a-zA-Z0-9]/-/g' | sed 's/--*/-/g').json"
+# --- Output helper -----------------------------------------------------------
 
-# If not found, try to find any branch info file with projectUpdated
-if [ ! -f "$BRANCH_INFO_FILE" ]; then
-    BRANCH_INFO_FILE=$(find .cdtools -name "*-*.json" -exec grep -l "projectUpdated" {} \; 2>/dev/null | head -1 || true)
+# Write output to GitHub Actions output file if available
+out() {
+  local key="$1"
+  local value="$2"
+
+  if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
+    printf '%s=%s\n' "$key" "$value" >>"$GITHUB_OUTPUT"
+  else
+    printf '%s=%s\n' "$key" "$value"
+  fi
+}
+
+# Return empty matrix results for cleanup / no-op cases
+empty_results() {
+  case "$REGISTRY_FILTER" in
+    npm)
+      out "npm-matrix" '{"include":[]}'
+      out "has-npm" "false"
+      out "release-tag" "stable"
+      ;;
+    docker)
+      out "docker-matrix" '{"include":[]}'
+      out "has-docker" "false"
+      out "release-tag" "stable"
+      ;;
+    all)
+      out "npm-matrix" '{"include":[]}'
+      out "docker-matrix" '{"include":[]}'
+      out "has-npm" "false"
+      out "has-docker" "false"
+      out "release-tag" "stable"
+      ;;
+  esac
+}
+
+# --- Branch info detection ---------------------------------------------------
+
+# Detect current branch name
+CURRENT_BRANCH="$(git branch --show-current)"
+
+# Parse branch name to extract tag and raw branch (format: branchName(tag))
+BRANCH_INFO_FILE=""
+RAW_BRANCH_NAME="$(printf '%s' "$CURRENT_BRANCH" | sed -n 's/^\(.*\)([^)]*)$/\1/p')"
+TAG_NAME="$(printf '%s' "$CURRENT_BRANCH" | sed -n 's/^.*(\([^)]*\))$/\1/p')"
+if [[ -n "${RAW_BRANCH_NAME}" && -n "${TAG_NAME}" ]]; then
+
+  # Match escapeBranchNameForFilename in src/utils/config.ts
+  ESCAPED_BRANCH_NAME="$(printf '%s' "$RAW_BRANCH_NAME" \
+    | sed 's#[/\\:*?"<>|]#-#g')"
+
+  BRANCH_INFO_FILE=".cdtools/${TAG_NAME}-${ESCAPED_BRANCH_NAME}.json"
 fi
 
-if [ ! -f "$BRANCH_INFO_FILE" ]; then
-    echo "ℹ️  Branch info file not found: $BRANCH_INFO_FILE" >&2
-    echo "✅ No workspaces to process (likely after end-pr cleanup), returning empty results" >&2
+# Backward-compat safe filename fallback (legacy format)
+if [[ -z "${BRANCH_INFO_FILE}" || ! -f "$BRANCH_INFO_FILE" ]]; then
+  SAFE_BRANCH="$(printf '%s' "$CURRENT_BRANCH" \
+    | sed 's/[^a-zA-Z0-9]/-/g; s/--*/-/g')"
+  BRANCH_INFO_FILE=".cdtools/${SAFE_BRANCH}.json"
+fi
 
-    # Return empty matrices based on filter
-    case "$REGISTRY_FILTER" in
-        npm)
-            if [ -n "${GITHUB_OUTPUT:-}" ]; then
-                echo "npm-matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
-                echo "has-npm=false" >> "$GITHUB_OUTPUT"
-                echo "release-tag=stable" >> "$GITHUB_OUTPUT"
-            else
-                echo "npm-matrix={\"include\":[]}"
-                echo "has-npm=false"
-                echo "release-tag=stable"
-            fi
-            ;;
-        docker)
-            if [ -n "${GITHUB_OUTPUT:-}" ]; then
-                echo "docker-matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
-                echo "has-docker=false" >> "$GITHUB_OUTPUT"
-                echo "release-tag=stable" >> "$GITHUB_OUTPUT"
-            else
-                echo "docker-matrix={\"include\":[]}"
-                echo "has-docker=false"
-                echo "release-tag=stable"
-            fi
-            ;;
-        all)
-            if [ -n "${GITHUB_OUTPUT:-}" ]; then
-                echo "npm-matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
-                echo "docker-matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
-                echo "has-npm=false" >> "$GITHUB_OUTPUT"
-                echo "has-docker=false" >> "$GITHUB_OUTPUT"
-                echo "release-tag=stable" >> "$GITHUB_OUTPUT"
-            else
-                echo "npm-matrix={\"include\":[]}"
-                echo "docker-matrix={\"include\":[]}"
-                echo "has-npm=false"
-                echo "has-docker=false"
-                echo "release-tag=stable"
-            fi
-            ;;
-    esac
+# Fallback: find any branch info file containing "projectUpdated"
+if [[ ! -f "$BRANCH_INFO_FILE" ]]; then
+  BRANCH_INFO_FILE="$(
+    find .cdtools -name "*-*.json" \
+      -exec grep -l "projectUpdated" {} \; 2>/dev/null \
+      | head -1 || true
+  )"
+fi
 
-    echo "🔍 Analysis complete: No workspaces found" >&2
-    exit 0
+# If still missing, exit gracefully with empty matrices
+if [[ -z "${BRANCH_INFO_FILE:-}" || ! -f "$BRANCH_INFO_FILE" ]]; then
+  echo "ℹ️  Branch info file not found, returning empty results" >&2
+  empty_results
+  exit 0
 fi
 
 echo "📋 Using branch info file: $BRANCH_INFO_FILE" >&2
 
-# Load config.json to get registry information
+# --- Config validation -------------------------------------------------------
+
 CONFIG_FILE=".cdtools/config.json"
-if [ ! -f "$CONFIG_FILE" ]; then
-    echo "❌ Config file not found: $CONFIG_FILE" >&2
-    exit 1
+
+if [[ ! -f "$CONFIG_FILE" ]]; then
+  echo "❌ Config file not found: $CONFIG_FILE" >&2
+  exit 1
 fi
 
-# Extract workspaces based on registry filter
-WORKSPACE_DATA=$(node -e "
-    const branchInfo = JSON.parse(require('fs').readFileSync('$BRANCH_INFO_FILE', 'utf-8'));
-    const config = JSON.parse(require('fs').readFileSync('$CONFIG_FILE', 'utf-8'));
+# --- Workspace extraction (jq only) ------------------------------------------
 
-    if (!branchInfo.projectUpdated) {
-        console.log(JSON.stringify({ npm: [], docker: [] }));
-        process.exit(0);
-    }
+# Build JSON object:
+#   { tag, npm[], docker[] }
+WORKSPACE_DATA="$(
+  jq -c --slurpfile cfg "$CONFIG_FILE" '
+    def projects: $cfg[0].projects;
 
-    const npmWorkspaces = [];
-    const dockerWorkspaces = [];
+    # If projectUpdated is missing, treat as empty object
+    (.projectUpdated // {}) as $pu
+    | {
+        tag: (.tag // "stable"),
 
-    for (const [workspacePath, version] of Object.entries(branchInfo.projectUpdated)) {
-        const project = config.projects.find(p => p.path === workspacePath);
-        if (!project) continue;
+        npm: (
+          $pu
+          | to_entries
+          | map(
+              . as $e
+              | (projects[]? | select(.path == $e.key)) as $p
+              | select($p != null and ($p.registries // [] | index("npm")))
+              | {workspace_path: $e.key, workspace_version: $e.value}
+            )
+        ),
 
-        const workspaceInfo = { workspace_path: workspacePath, workspace_version: version };
+        docker: (
+          $pu
+          | to_entries
+          | map(
+              . as $e
+              | (projects[]? | select(.path == $e.key)) as $p
+              | select($p != null and ($p.registries // [] | index("docker")))
+              | {workspace_path: $e.key, workspace_version: $e.value}
+            )
+        )
+      }
+  ' "$BRANCH_INFO_FILE"
+)"
 
-        if (project.registries.includes('npm')) {
-            npmWorkspaces.push(workspaceInfo);
-        }
+# --- Derived outputs ---------------------------------------------------------
 
-        if (project.registries.includes('docker')) {
-            dockerWorkspaces.push(workspaceInfo);
-        }
-    }
+NPM_MATRIX="$(jq -c '{include: .npm}' <<<"$WORKSPACE_DATA")"
+DOCKER_MATRIX="$(jq -c '{include: .docker}' <<<"$WORKSPACE_DATA")"
 
-    console.log(JSON.stringify({
-        npm: npmWorkspaces,
-        docker: dockerWorkspaces,
-        tag: branchInfo.tag || 'stable'
-    }));
-")
+HAS_NPM="$(jq -r '(.npm | length) > 0' <<<"$WORKSPACE_DATA")"
+HAS_DOCKER="$(jq -r '(.docker | length) > 0' <<<"$WORKSPACE_DATA")"
 
-# Generate matrices based on filter
+RELEASE_TAG="$(jq -r '.tag' <<<"$WORKSPACE_DATA")"
+
+# --- Final output ------------------------------------------------------------
+
 case "$REGISTRY_FILTER" in
-    npm)
-        NPM_MATRIX=$(echo "$WORKSPACE_DATA" | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            console.log(JSON.stringify({ include: data.npm }));
-        ")
-        HAS_NPM=$(echo "$WORKSPACE_DATA" | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            console.log(data.npm.length > 0 ? 'true' : 'false');
-        ")
-        RELEASE_TAG=$(echo "$WORKSPACE_DATA" | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            console.log(data.tag);
-        ")
-
-        # Output results
-        if [ -n "${GITHUB_OUTPUT:-}" ]; then
-            echo "npm-matrix=$NPM_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "has-npm=$HAS_NPM" >> "$GITHUB_OUTPUT"
-            echo "release-tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-        else
-            echo "npm-matrix=$NPM_MATRIX"
-            echo "has-npm=$HAS_NPM"
-            echo "release-tag=$RELEASE_TAG"
-        fi
-
-        echo "🔍 Analysis complete:" >&2
-        echo "  NPM workspaces: $HAS_NPM" >&2
-        echo "  NPM matrix: $NPM_MATRIX" >&2
-        ;;
-
-    docker)
-        DOCKER_MATRIX=$(echo "$WORKSPACE_DATA" | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            console.log(JSON.stringify({ include: data.docker }));
-        ")
-        HAS_DOCKER=$(echo "$WORKSPACE_DATA" | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            console.log(data.docker.length > 0 ? 'true' : 'false');
-        ")
-        RELEASE_TAG=$(echo "$WORKSPACE_DATA" | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            console.log(data.tag);
-        ")
-
-        # Output results
-        if [ -n "${GITHUB_OUTPUT:-}" ]; then
-            echo "docker-matrix=$DOCKER_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "has-docker=$HAS_DOCKER" >> "$GITHUB_OUTPUT"
-            echo "release-tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-        else
-            echo "docker-matrix=$DOCKER_MATRIX"
-            echo "has-docker=$HAS_DOCKER"
-            echo "release-tag=$RELEASE_TAG"
-        fi
-
-        echo "🔍 Analysis complete:" >&2
-        echo "  Docker workspaces: $HAS_DOCKER" >&2
-        echo "  Docker matrix: $DOCKER_MATRIX" >&2
-        ;;
-
-    all)
-        NPM_MATRIX=$(echo "$WORKSPACE_DATA" | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            console.log(JSON.stringify({ include: data.npm }));
-        ")
-        DOCKER_MATRIX=$(echo "$WORKSPACE_DATA" | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            console.log(JSON.stringify({ include: data.docker }));
-        ")
-        HAS_NPM=$(echo "$WORKSPACE_DATA" | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            console.log(data.npm.length > 0 ? 'true' : 'false');
-        ")
-        HAS_DOCKER=$(echo "$WORKSPACE_DATA" | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            console.log(data.docker.length > 0 ? 'true' : 'false');
-        ")
-        RELEASE_TAG=$(echo "$WORKSPACE_DATA" | node -e "
-            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
-            console.log(data.tag);
-        ")
-
-        # Output results
-        if [ -n "${GITHUB_OUTPUT:-}" ]; then
-            echo "npm-matrix=$NPM_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "docker-matrix=$DOCKER_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "has-npm=$HAS_NPM" >> "$GITHUB_OUTPUT"
-            echo "has-docker=$HAS_DOCKER" >> "$GITHUB_OUTPUT"
-            echo "release-tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-        else
-            echo "npm-matrix=$NPM_MATRIX"
-            echo "docker-matrix=$DOCKER_MATRIX"
-            echo "has-npm=$HAS_NPM"
-            echo "has-docker=$HAS_DOCKER"
-            echo "release-tag=$RELEASE_TAG"
-        fi
-
-        echo "🔍 Analysis complete:" >&2
-        echo "  NPM workspaces: $HAS_NPM" >&2
-        echo "  Docker workspaces: $HAS_DOCKER" >&2
-        echo "  NPM matrix: $NPM_MATRIX" >&2
-        echo "  Docker matrix: $DOCKER_MATRIX" >&2
-        ;;
+  npm)
+    out "npm-matrix" "$NPM_MATRIX"
+    out "has-npm" "$HAS_NPM"
+    out "release-tag" "$RELEASE_TAG"
+    ;;
+  docker)
+    out "docker-matrix" "$DOCKER_MATRIX"
+    out "has-docker" "$HAS_DOCKER"
+    out "release-tag" "$RELEASE_TAG"
+    ;;
+  all)
+    out "npm-matrix" "$NPM_MATRIX"
+    out "docker-matrix" "$DOCKER_MATRIX"
+    out "has-npm" "$HAS_NPM"
+    out "has-docker" "$HAS_DOCKER"
+    out "release-tag" "$RELEASE_TAG"
+    ;;
 esac
+
+echo "🔍 Analysis complete: npm=$HAS_NPM docker=$HAS_DOCKER tag=$RELEASE_TAG" >&2
