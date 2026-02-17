@@ -49,23 +49,16 @@ jobs:
             exit 1
           fi
           echo "✅ Version verified: $ACTUAL_VERSION"
+      # for npm trusted publishing, npm@11.5.1 or later is required
+      - name: Update npm
+        run: npm install -g npm@11.5.1
       - name: Install dependencies
         working-directory: ${{ inputs.workspace_path }}
         run: npm ci
       # Optional: Build the package if needed
       - name: build package
         working-directory: ${{ inputs.workspace_path }}
-        run: npm run build & npm --version
-      - name: Dump OIDC token claims (debug)
-        env:
-          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
-          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
-        run: |
-          set -euo pipefail
-          TOK=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm" | jq -r '.value')
-          echo "$TOK" | cut -d '.' -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | jq .
-
+        run: npm run build
       - name: Publish npm package
         working-directory: ${{ inputs.workspace_path }}
         run: |
