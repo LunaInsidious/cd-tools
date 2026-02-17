@@ -57,6 +57,7 @@ vi.mock("prompts", () => ({
 	default: vi.fn(),
 }));
 
+import prompts from "prompts";
 import {
 	type Config,
 	checkInitialized,
@@ -83,7 +84,6 @@ import {
 	getPackageName,
 	updateMultipleProjectVersions,
 } from "../utils/version-updater.js";
-import prompts from "prompts";
 
 // Mock typed functions
 const mockCheckInitialized = vi.mocked(checkInitialized);
