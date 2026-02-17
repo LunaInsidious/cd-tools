@@ -32,7 +32,7 @@ jobs:
       - name: Use Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
+          node-version: 22.x
           cache: "npm"
           registry-url: "https://registry.npmjs.org/"
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -55,7 +55,17 @@ jobs:
       # Optional: Build the package if needed
       - name: build package
         working-directory: ${{ inputs.workspace_path }}
-        run: npm run build
+        run: npm run build & npm --version
+      - name: Dump OIDC token claims (debug)
+        env:
+          ACTIONS_ID_TOKEN_REQUEST_URL: ${{ env.ACTIONS_ID_TOKEN_REQUEST_URL }}
+          ACTIONS_ID_TOKEN_REQUEST_TOKEN: ${{ env.ACTIONS_ID_TOKEN_REQUEST_TOKEN }}
+        run: |
+          set -euo pipefail
+          TOK=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=npm" | jq -r '.value')
+          echo "$TOK" | cut -d '.' -f2 | tr '_-' '/+' | base64 -d 2>/dev/null | jq .
+
       - name: Publish npm package
         working-directory: ${{ inputs.workspace_path }}
         run: |
