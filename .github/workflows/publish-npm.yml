@@ -4,15 +4,15 @@ on:
   workflow_call:
     inputs:
       workspace_path:
-        description: 'Path to the workspace to publish'
+        description: "Path to the workspace to publish"
         required: true
         type: string
       workspace_version:
-        description: 'Version to publish for the workspace'
+        description: "Version to publish for the workspace"
         required: true
         type: string
       release_tag:
-        description: 'Release tag (e.g., alpha, rc, stable)'
+        description: "Release tag (e.g., alpha, rc, stable)"
         required: true
         type: string
 
@@ -33,8 +33,8 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 20.x
-          cache: 'npm'
-          registry-url: 'https://npm.pkg.github.com'
+          cache: "npm"
+          registry-url: "https://npm.pkg.github.com"
           token: ${{ secrets.GITHUB_TOKEN }}
           # Defaults to the user or organization that owns the workflow file
           scope: ${{ '@' }}${{ github.repository_owner }}
@@ -53,10 +53,10 @@ jobs:
           echo "✅ Version verified: $ACTUAL_VERSION"
       - name: Install dependencies
         working-directory: ${{ inputs.workspace_path }}
-        run: npm ci --omit=dev
+        run: npm ci
       # Optional: Build the package if needed
       - name: build package
-        run: tsc --build ${{ inputs.build-execute-workspace }}
+        run: npm run build ${{ inputs.workspace_path }}
       - name: Publish npm package
         working-directory: ${{ inputs.workspace_path }}
         run: |
