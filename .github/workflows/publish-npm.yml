@@ -55,7 +55,7 @@ jobs:
       # Optional: Build the package if needed
       - name: build package
         working-directory: ${{ inputs.workspace_path }}
-        run: npm run build && npm --version
+        run: npm run build
       - name: Publish npm package
         working-directory: ${{ inputs.workspace_path }}
         run: |
