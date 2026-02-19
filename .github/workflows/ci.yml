@@ -34,4 +34,8 @@ jobs:
         run: npm run lint
 
       - name: Test
+        env:
+          # Keep script tests writing to stdout in CI.
+          # analyze-workspaces.sh switches to file output when GITHUB_OUTPUT is set.
+          GITHUB_OUTPUT: ""
         run: npm run test
