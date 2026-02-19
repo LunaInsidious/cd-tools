@@ -14,6 +14,19 @@
 
 set -euo pipefail
 
+# Output helper
+out() {
+    local key="$1"
+    local value="$2"
+
+    # Always print to stdout so script behavior is consistent in and out of Actions.
+    printf '%s=%s\n' "$key" "$value"
+
+    if [ -n "${GITHUB_OUTPUT:-}" ]; then
+        printf '%s=%s\n' "$key" "$value" >> "$GITHUB_OUTPUT"
+    fi
+}
+
 # Parse arguments
 REGISTRY_FILTER="${1:-all}"
 
@@ -40,41 +53,21 @@ if [ ! -f "$BRANCH_INFO_FILE" ]; then
     # Return empty matrices based on filter
     case "$REGISTRY_FILTER" in
         npm)
-            if [ -n "${GITHUB_OUTPUT:-}" ]; then
-                echo "npm-matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
-                echo "has-npm=false" >> "$GITHUB_OUTPUT"
-                echo "release-tag=stable" >> "$GITHUB_OUTPUT"
-            else
-                echo "npm-matrix={\"include\":[]}"
-                echo "has-npm=false"
-                echo "release-tag=stable"
-            fi
+            out "npm-matrix" "{\"include\":[]}"
+            out "has-npm" "false"
+            out "release-tag" "stable"
             ;;
         docker)
-            if [ -n "${GITHUB_OUTPUT:-}" ]; then
-                echo "docker-matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
-                echo "has-docker=false" >> "$GITHUB_OUTPUT"
-                echo "release-tag=stable" >> "$GITHUB_OUTPUT"
-            else
-                echo "docker-matrix={\"include\":[]}"
-                echo "has-docker=false"
-                echo "release-tag=stable"
-            fi
+            out "docker-matrix" "{\"include\":[]}"
+            out "has-docker" "false"
+            out "release-tag" "stable"
             ;;
         all)
-            if [ -n "${GITHUB_OUTPUT:-}" ]; then
-                echo "npm-matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
-                echo "docker-matrix={\"include\":[]}" >> "$GITHUB_OUTPUT"
-                echo "has-npm=false" >> "$GITHUB_OUTPUT"
-                echo "has-docker=false" >> "$GITHUB_OUTPUT"
-                echo "release-tag=stable" >> "$GITHUB_OUTPUT"
-            else
-                echo "npm-matrix={\"include\":[]}"
-                echo "docker-matrix={\"include\":[]}"
-                echo "has-npm=false"
-                echo "has-docker=false"
-                echo "release-tag=stable"
-            fi
+            out "npm-matrix" "{\"include\":[]}"
+            out "docker-matrix" "{\"include\":[]}"
+            out "has-npm" "false"
+            out "has-docker" "false"
+            out "release-tag" "stable"
             ;;
     esac
 
@@ -143,15 +136,9 @@ case "$REGISTRY_FILTER" in
         ")
 
         # Output results
-        if [ -n "${GITHUB_OUTPUT:-}" ]; then
-            echo "npm-matrix=$NPM_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "has-npm=$HAS_NPM" >> "$GITHUB_OUTPUT"
-            echo "release-tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-        else
-            echo "npm-matrix=$NPM_MATRIX"
-            echo "has-npm=$HAS_NPM"
-            echo "release-tag=$RELEASE_TAG"
-        fi
+        out "npm-matrix" "$NPM_MATRIX"
+        out "has-npm" "$HAS_NPM"
+        out "release-tag" "$RELEASE_TAG"
 
         echo "🔍 Analysis complete:" >&2
         echo "  NPM workspaces: $HAS_NPM" >&2
@@ -173,15 +160,9 @@ case "$REGISTRY_FILTER" in
         ")
 
         # Output results
-        if [ -n "${GITHUB_OUTPUT:-}" ]; then
-            echo "docker-matrix=$DOCKER_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "has-docker=$HAS_DOCKER" >> "$GITHUB_OUTPUT"
-            echo "release-tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-        else
-            echo "docker-matrix=$DOCKER_MATRIX"
-            echo "has-docker=$HAS_DOCKER"
-            echo "release-tag=$RELEASE_TAG"
-        fi
+        out "docker-matrix" "$DOCKER_MATRIX"
+        out "has-docker" "$HAS_DOCKER"
+        out "release-tag" "$RELEASE_TAG"
 
         echo "🔍 Analysis complete:" >&2
         echo "  Docker workspaces: $HAS_DOCKER" >&2
@@ -211,19 +192,11 @@ case "$REGISTRY_FILTER" in
         ")
 
         # Output results
-        if [ -n "${GITHUB_OUTPUT:-}" ]; then
-            echo "npm-matrix=$NPM_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "docker-matrix=$DOCKER_MATRIX" >> "$GITHUB_OUTPUT"
-            echo "has-npm=$HAS_NPM" >> "$GITHUB_OUTPUT"
-            echo "has-docker=$HAS_DOCKER" >> "$GITHUB_OUTPUT"
-            echo "release-tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
-        else
-            echo "npm-matrix=$NPM_MATRIX"
-            echo "docker-matrix=$DOCKER_MATRIX"
-            echo "has-npm=$HAS_NPM"
-            echo "has-docker=$HAS_DOCKER"
-            echo "release-tag=$RELEASE_TAG"
-        fi
+        out "npm-matrix" "$NPM_MATRIX"
+        out "docker-matrix" "$DOCKER_MATRIX"
+        out "has-npm" "$HAS_NPM"
+        out "has-docker" "$HAS_DOCKER"
+        out "release-tag" "$RELEASE_TAG"
 
         echo "🔍 Analysis complete:" >&2
         echo "  NPM workspaces: $HAS_NPM" >&2
