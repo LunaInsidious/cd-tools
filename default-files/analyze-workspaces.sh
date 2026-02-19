@@ -4,13 +4,15 @@
 # Analyze workspaces from branch info files and output matrix data for GitHub Actions.
 #
 # Usage:
-#   ./analyze-workspaces.sh [npm|docker|all]
+#   ./analyze-workspaces.sh [npm|docker|crates|all]
 #
 # Outputs (to GITHUB_OUTPUT if available, otherwise stdout):
 #   - npm-matrix: JSON matrix for NPM workspaces
 #   - docker-matrix: JSON matrix for Docker workspaces
+#   - crates-matrix: JSON matrix for crates.io workspaces
 #   - has-npm: true/false
 #   - has-docker: true/false
+#   - has-crates: true/false
 #   - release-tag: tag from branch info (e.g., alpha, rc, stable)
 
 set -euo pipefail
@@ -19,9 +21,9 @@ set -euo pipefail
 
 REGISTRY_FILTER="${1:-all}"
 
-if [[ ! "$REGISTRY_FILTER" =~ ^(npm|docker|all)$ ]]; then
+if [[ ! "$REGISTRY_FILTER" =~ ^(npm|docker|crates|all)$ ]]; then
   echo "❌ Invalid registry filter: $REGISTRY_FILTER" >&2
-  echo "Usage: $0 [npm|docker|all]" >&2
+  echo "Usage: $0 [npm|docker|crates|all]" >&2
   exit 1
 fi
 
@@ -53,11 +55,18 @@ empty_results() {
       out "has-docker" "false"
       out "release-tag" "stable"
       ;;
+    crates)
+      out "crates-matrix" '{"include":[]}'
+      out "has-crates" "false"
+      out "release-tag" "stable"
+      ;;
     all)
       out "npm-matrix" '{"include":[]}'
       out "docker-matrix" '{"include":[]}'
+      out "crates-matrix" '{"include":[]}'
       out "has-npm" "false"
       out "has-docker" "false"
+      out "has-crates" "false"
       out "release-tag" "stable"
       ;;
   esac
@@ -118,7 +127,7 @@ fi
 # --- Workspace extraction (jq only) ------------------------------------------
 
 # Build JSON object:
-#   { tag, npm[], docker[] }
+#   { tag, npm[], docker[], crates[] }
 WORKSPACE_DATA="$(
   jq -c --slurpfile cfg "$CONFIG_FILE" '
     def projects: $cfg[0].projects;
@@ -148,6 +157,17 @@ WORKSPACE_DATA="$(
               | select($p != null and ($p.registries // [] | index("docker")))
               | {workspace_path: $e.key, workspace_version: $e.value}
             )
+        ),
+
+        crates: (
+          $pu
+          | to_entries
+          | map(
+              . as $e
+              | (projects[]? | select(.path == $e.key)) as $p
+              | select($p != null and ($p.registries // [] | index("crates")))
+              | {workspace_path: $e.key, workspace_version: $e.value}
+            )
         )
       }
   ' "$BRANCH_INFO_FILE"
@@ -157,9 +177,11 @@ WORKSPACE_DATA="$(
 
 NPM_MATRIX="$(jq -c '{include: .npm}' <<<"$WORKSPACE_DATA")"
 DOCKER_MATRIX="$(jq -c '{include: .docker}' <<<"$WORKSPACE_DATA")"
+CRATES_MATRIX="$(jq -c '{include: .crates}' <<<"$WORKSPACE_DATA")"
 
 HAS_NPM="$(jq -r '(.npm | length) > 0' <<<"$WORKSPACE_DATA")"
 HAS_DOCKER="$(jq -r '(.docker | length) > 0' <<<"$WORKSPACE_DATA")"
+HAS_CRATES="$(jq -r '(.crates | length) > 0' <<<"$WORKSPACE_DATA")"
 
 RELEASE_TAG="$(jq -r '.tag' <<<"$WORKSPACE_DATA")"
 
@@ -176,13 +198,20 @@ case "$REGISTRY_FILTER" in
     out "has-docker" "$HAS_DOCKER"
     out "release-tag" "$RELEASE_TAG"
     ;;
+  crates)
+    out "crates-matrix" "$CRATES_MATRIX"
+    out "has-crates" "$HAS_CRATES"
+    out "release-tag" "$RELEASE_TAG"
+    ;;
   all)
     out "npm-matrix" "$NPM_MATRIX"
     out "docker-matrix" "$DOCKER_MATRIX"
+    out "crates-matrix" "$CRATES_MATRIX"
     out "has-npm" "$HAS_NPM"
     out "has-docker" "$HAS_DOCKER"
+    out "has-crates" "$HAS_CRATES"
     out "release-tag" "$RELEASE_TAG"
     ;;
 esac
 
-echo "🔍 Analysis complete: npm=$HAS_NPM docker=$HAS_DOCKER tag=$RELEASE_TAG" >&2
+echo "🔍 Analysis complete: npm=$HAS_NPM docker=$HAS_DOCKER crates=$HAS_CRATES tag=$RELEASE_TAG" >&2

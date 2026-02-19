@@ -88,6 +88,22 @@ describe("initCommand", () => {
 				".github/workflows/publish-container-image.yml",
 			);
 		});
+
+		it("should initialize with crates registry", async () => {
+			mockAccess.mockRejectedValue(new Error("File not found"));
+			mockPrompts.mockResolvedValue({ registries: ["crates"] });
+
+			await initCommand();
+
+			expect(mockCopyFile).toHaveBeenCalledWith(
+				expect.stringContaining("default-files/release-crates.yml"),
+				".github/workflows/release-crates.yml",
+			);
+			expect(mockCopyFile).toHaveBeenCalledWith(
+				expect.stringContaining("default-files/publish-crates.yml"),
+				".github/workflows/publish-crates.yml",
+			);
+		});
 	});
 
 	describe("overwrite handling", () => {
