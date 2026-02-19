@@ -45,6 +45,11 @@ describe("analyze-workspaces.sh Script Tests", () => {
 					baseVersion: "1.5.0",
 					registries: ["npm", "docker"],
 				},
+				{
+					path: "packages/rustlib",
+					baseVersion: "0.1.0",
+					registries: ["crates"],
+				},
 			],
 			versioningStrategy: "independent",
 			versionTags: {
@@ -193,8 +198,58 @@ describe("analyze-workspaces.sh Script Tests", () => {
 		});
 	});
 
+	describe("Crates filter", () => {
+		it("should analyze crates-only workspaces", async () => {
+			await execAsync("git checkout -b feat/crates\\(alpha\\)");
+
+			const branchInfo = {
+				tag: "alpha",
+				parentBranch: "main",
+				projectUpdated: {
+					"packages/rustlib": "0.1.1-alpha.20231225103045",
+				},
+			};
+
+			await writeFile(
+				join(cdtoolsDir, "alpha-feat-crates.json"),
+				JSON.stringify(branchInfo, null, 2),
+			);
+
+			const { stdout } = await execAsync(`${scriptPath} crates`);
+
+			expect(stdout).toContain("has-crates=true");
+			expect(stdout).toContain("release-tag=alpha");
+			expect(stdout).toMatch(
+				/crates-matrix=.*workspace_path.*packages\/rustlib/,
+			);
+		});
+
+		it("should handle no crates workspaces", async () => {
+			await execAsync("git checkout -b feat/no-crates\\(alpha\\)");
+
+			const branchInfo = {
+				tag: "alpha",
+				parentBranch: "main",
+				projectUpdated: {
+					"packages/frontend": "1.0.1-alpha.20231225103045",
+				},
+			};
+
+			await writeFile(
+				join(cdtoolsDir, "alpha-feat-no-crates.json"),
+				JSON.stringify(branchInfo, null, 2),
+			);
+
+			const { stdout } = await execAsync(`${scriptPath} crates`);
+
+			expect(stdout).toContain("has-crates=false");
+			expect(stdout).toContain("release-tag=alpha");
+			expect(stdout).toContain('crates-matrix={"include":[]}');
+		});
+	});
+
 	describe("All filter", () => {
-		it("should analyze both NPM and Docker workspaces", async () => {
+		it("should analyze NPM, Docker, and crates workspaces", async () => {
 			await execAsync("git checkout -b feat/all\\(alpha\\)");
 
 			const branchInfo = {
@@ -204,6 +259,7 @@ describe("analyze-workspaces.sh Script Tests", () => {
 					"packages/frontend": "1.0.1-alpha.20231225103045",
 					"packages/backend": "2.0.1-alpha.20231225103045",
 					"packages/fullstack": "1.5.1-alpha.20231225103045",
+					"packages/rustlib": "0.1.1-alpha.20231225103045",
 				},
 			};
 
@@ -216,11 +272,13 @@ describe("analyze-workspaces.sh Script Tests", () => {
 
 			expect(stdout).toContain("has-npm=true");
 			expect(stdout).toContain("has-docker=true");
+			expect(stdout).toContain("has-crates=true");
 			expect(stdout).toContain("release-tag=alpha");
 			expect(stdout).toMatch(/npm-matrix=.*packages\/frontend/);
 			expect(stdout).toMatch(/npm-matrix=.*packages\/fullstack/);
 			expect(stdout).toMatch(/docker-matrix=.*packages\/backend/);
 			expect(stdout).toMatch(/docker-matrix=.*packages\/fullstack/);
+			expect(stdout).toMatch(/crates-matrix=.*packages\/rustlib/);
 		});
 	});
 
@@ -292,9 +350,11 @@ describe("analyze-workspaces.sh Script Tests", () => {
 
 			expect(stdout).toContain("has-npm=false");
 			expect(stdout).toContain("has-docker=false");
+			expect(stdout).toContain("has-crates=false");
 			expect(stdout).toContain("release-tag=alpha");
 			expect(stdout).toContain('npm-matrix={"include":[]}');
 			expect(stdout).toContain('docker-matrix={"include":[]}');
+			expect(stdout).toContain('crates-matrix={"include":[]}');
 		});
 	});
 

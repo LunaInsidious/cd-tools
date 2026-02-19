@@ -91,6 +91,7 @@ export async function initCommand(): Promise<void> {
 		choices: [
 			{ title: "npm", value: "npm" },
 			{ title: "docker(ghcr.io)", value: "docker" },
+			{ title: "rust(crates.io)", value: "crates" },
 		],
 		min: 1,
 	});
@@ -139,6 +140,16 @@ export async function initCommand(): Promise<void> {
 					workflows.push({
 						source: join(defaultFilesDir, "publish-container-image.yml"),
 						target: ".github/workflows/publish-container-image.yml",
+					});
+					break;
+				case "crates":
+					workflows.push({
+						source: join(defaultFilesDir, "release-crates.yml"),
+						target: ".github/workflows/release-crates.yml",
+					});
+					workflows.push({
+						source: join(defaultFilesDir, "publish-crates.yml"),
+						target: ".github/workflows/publish-crates.yml",
 					});
 					break;
 				default:

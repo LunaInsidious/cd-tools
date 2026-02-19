@@ -1,0 +1,80 @@
+name: Release Crates Packages
+
+on:
+  push:
+    paths:
+      - '.cdtools/*-*.json'
+
+permissions:
+  contents: write
+
+jobs:
+  analyze-crates-workspaces:
+    name: Analyze Crates Workspaces to Release
+    runs-on: ubuntu-latest
+    outputs:
+      crates-matrix: ${{ steps.analyze.outputs.crates-matrix }}
+      has-crates: ${{ steps.analyze.outputs.has-crates }}
+      release-tag: ${{ steps.analyze.outputs.release-tag }}
+    steps:
+      - name: Check out the repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Use Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 22.x
+      - name: Verify analyze script exists
+        run: |
+          if [ ! -f ".github/scripts/analyze-workspaces.sh" ]; then
+            echo "❌ analyze-workspaces.sh not found! Run 'cd-tools init' to set up required scripts."
+            exit 1
+          fi
+
+          chmod +x .github/scripts/analyze-workspaces.sh
+          echo "✅ analyze-workspaces.sh is ready"
+
+      - name: Analyze crates workspaces from branch info
+        id: analyze
+        run: .github/scripts/analyze-workspaces.sh crates
+
+  publish-crates:
+    name: Publish Crates Packages
+    needs: analyze-crates-workspaces
+    if: ${{ needs.analyze-crates-workspaces.outputs.has-crates == 'true' }}
+    strategy:
+      matrix: ${{ fromJson(needs.analyze-crates-workspaces.outputs.crates-matrix) }}
+      fail-fast: false
+    uses: ./.github/workflows/publish-crates.yml
+    with:
+      workspace_path: ${{ matrix.workspace_path }}
+      workspace_version: ${{ matrix.workspace_version }}
+      release_tag: ${{ needs.analyze-crates-workspaces.outputs.release-tag }}
+    secrets: inherit
+
+  release-summary:
+    name: Crates Release Summary
+    needs: [analyze-crates-workspaces, publish-crates]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Release Summary
+        run: |
+          echo "🦀 Crates Release Summary"
+          echo "========================="
+          echo ""
+          echo "📋 Workspace analysis:"
+          echo "  - Crates workspaces found: ${{ needs.analyze-crates-workspaces.outputs.has-crates }}"
+          echo ""
+
+          if [ "${{ needs.publish-crates.result }}" = "failure" ]; then
+            echo "❌ Crates releases failed. Please check the logs above."
+            exit 1
+          elif [ "${{ needs.publish-crates.result }}" = "success" ]; then
+            echo "✅ All crates releases completed successfully!"
+          elif [ "${{ needs.analyze-crates-workspaces.outputs.has-crates }}" = "false" ]; then
+            echo "ℹ️  No crates workspaces were configured for release."
+          else
+            echo "ℹ️  Crates release completed."
+          fi

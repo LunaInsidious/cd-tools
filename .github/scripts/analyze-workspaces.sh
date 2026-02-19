@@ -3,13 +3,15 @@
 # analyze-workspaces.sh
 # Analyzes workspaces from branch info files and outputs matrix data for GitHub Actions
 #
-# Usage: ./analyze-workspaces.sh [npm|docker|all]
+# Usage: ./analyze-workspaces.sh [npm|docker|crates|all]
 #
 # Outputs (to GITHUB_OUTPUT if available, otherwise stdout):
 #   - npm-matrix: JSON matrix for NPM workspaces
 #   - docker-matrix: JSON matrix for Docker workspaces
+#   - crates-matrix: JSON matrix for crates.io workspaces
 #   - has-npm: true/false
 #   - has-docker: true/false
+#   - has-crates: true/false
 #   - release-tag: tag from branch info (e.g., alpha, rc, stable)
 
 set -euo pipefail
@@ -31,9 +33,9 @@ out() {
 REGISTRY_FILTER="${1:-all}"
 
 # Validate arguments
-if [[ ! "$REGISTRY_FILTER" =~ ^(npm|docker|all)$ ]]; then
+if [[ ! "$REGISTRY_FILTER" =~ ^(npm|docker|crates|all)$ ]]; then
     echo "❌ Invalid registry filter: $REGISTRY_FILTER" >&2
-    echo "Usage: $0 [npm|docker|all]" >&2
+    echo "Usage: $0 [npm|docker|crates|all]" >&2
     exit 1
 fi
 
@@ -62,11 +64,18 @@ if [ ! -f "$BRANCH_INFO_FILE" ]; then
             out "has-docker" "false"
             out "release-tag" "stable"
             ;;
+        crates)
+            out "crates-matrix" "{\"include\":[]}"
+            out "has-crates" "false"
+            out "release-tag" "stable"
+            ;;
         all)
             out "npm-matrix" "{\"include\":[]}"
             out "docker-matrix" "{\"include\":[]}"
+            out "crates-matrix" "{\"include\":[]}"
             out "has-npm" "false"
             out "has-docker" "false"
+            out "has-crates" "false"
             out "release-tag" "stable"
             ;;
     esac
@@ -90,12 +99,13 @@ WORKSPACE_DATA=$(node -e "
     const config = JSON.parse(require('fs').readFileSync('$CONFIG_FILE', 'utf-8'));
 
     if (!branchInfo.projectUpdated) {
-        console.log(JSON.stringify({ npm: [], docker: [] }));
+        console.log(JSON.stringify({ npm: [], docker: [], crates: [] }));
         process.exit(0);
     }
 
     const npmWorkspaces = [];
     const dockerWorkspaces = [];
+    const cratesWorkspaces = [];
 
     for (const [workspacePath, version] of Object.entries(branchInfo.projectUpdated)) {
         const project = config.projects.find(p => p.path === workspacePath);
@@ -110,11 +120,16 @@ WORKSPACE_DATA=$(node -e "
         if (project.registries.includes('docker')) {
             dockerWorkspaces.push(workspaceInfo);
         }
+
+        if (project.registries.includes('crates')) {
+            cratesWorkspaces.push(workspaceInfo);
+        }
     }
 
     console.log(JSON.stringify({
         npm: npmWorkspaces,
         docker: dockerWorkspaces,
+        crates: cratesWorkspaces,
         tag: branchInfo.tag || 'stable'
     }));
 ")
@@ -169,6 +184,30 @@ case "$REGISTRY_FILTER" in
         echo "  Docker matrix: $DOCKER_MATRIX" >&2
         ;;
 
+    crates)
+        CRATES_MATRIX=$(echo "$WORKSPACE_DATA" | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
+            console.log(JSON.stringify({ include: data.crates }));
+        ")
+        HAS_CRATES=$(echo "$WORKSPACE_DATA" | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
+            console.log(data.crates.length > 0 ? 'true' : 'false');
+        ")
+        RELEASE_TAG=$(echo "$WORKSPACE_DATA" | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
+            console.log(data.tag);
+        ")
+
+        # Output results
+        out "crates-matrix" "$CRATES_MATRIX"
+        out "has-crates" "$HAS_CRATES"
+        out "release-tag" "$RELEASE_TAG"
+
+        echo "🔍 Analysis complete:" >&2
+        echo "  Crates workspaces: $HAS_CRATES" >&2
+        echo "  Crates matrix: $CRATES_MATRIX" >&2
+        ;;
+
     all)
         NPM_MATRIX=$(echo "$WORKSPACE_DATA" | node -e "
             const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
@@ -178,6 +217,10 @@ case "$REGISTRY_FILTER" in
             const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
             console.log(JSON.stringify({ include: data.docker }));
         ")
+        CRATES_MATRIX=$(echo "$WORKSPACE_DATA" | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
+            console.log(JSON.stringify({ include: data.crates }));
+        ")
         HAS_NPM=$(echo "$WORKSPACE_DATA" | node -e "
             const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
             console.log(data.npm.length > 0 ? 'true' : 'false');
@@ -185,6 +228,10 @@ case "$REGISTRY_FILTER" in
         HAS_DOCKER=$(echo "$WORKSPACE_DATA" | node -e "
             const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
             console.log(data.docker.length > 0 ? 'true' : 'false');
+        ")
+        HAS_CRATES=$(echo "$WORKSPACE_DATA" | node -e "
+            const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
+            console.log(data.crates.length > 0 ? 'true' : 'false');
         ")
         RELEASE_TAG=$(echo "$WORKSPACE_DATA" | node -e "
             const data = JSON.parse(require('fs').readFileSync('/dev/stdin', 'utf-8'));
@@ -194,14 +241,18 @@ case "$REGISTRY_FILTER" in
         # Output results
         out "npm-matrix" "$NPM_MATRIX"
         out "docker-matrix" "$DOCKER_MATRIX"
+        out "crates-matrix" "$CRATES_MATRIX"
         out "has-npm" "$HAS_NPM"
         out "has-docker" "$HAS_DOCKER"
+        out "has-crates" "$HAS_CRATES"
         out "release-tag" "$RELEASE_TAG"
 
         echo "🔍 Analysis complete:" >&2
         echo "  NPM workspaces: $HAS_NPM" >&2
         echo "  Docker workspaces: $HAS_DOCKER" >&2
+        echo "  Crates workspaces: $HAS_CRATES" >&2
         echo "  NPM matrix: $NPM_MATRIX" >&2
         echo "  Docker matrix: $DOCKER_MATRIX" >&2
+        echo "  Crates matrix: $CRATES_MATRIX" >&2
         ;;
 esac
