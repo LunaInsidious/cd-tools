@@ -32,10 +32,11 @@ out() {
   local key="$1"
   local value="$2"
 
+  # Always print to stdout so local/script tests can assert output consistently.
+  printf '%s=%s\n' "$key" "$value"
+
   if [[ -n "${GITHUB_OUTPUT:-}" ]]; then
     printf '%s=%s\n' "$key" "$value" >>"$GITHUB_OUTPUT"
-  else
-    printf '%s=%s\n' "$key" "$value"
   fi
 }
 
